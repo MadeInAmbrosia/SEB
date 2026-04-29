@@ -29,6 +29,7 @@ class SEB(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True 
         super().__init__(command_prefix="!", intents=intents)
         self.logger = logging.getLogger("SEB")
 
@@ -47,6 +48,7 @@ bot = SEB()
 )
 @app_commands.describe(
     category="The category of files to look for",
+    user="Filter by a specific user (defaults to all)",
     channel="Specific channel to scan (defaults to all)",
     days="Scan messages from the last X days (defaults to all time)",
     dm="Send the final report to your DM (defaults to No)",
@@ -70,6 +72,7 @@ bot = SEB()
 async def scans(
     interaction: discord.Interaction, 
     category: app_commands.Choice[str], 
+    user: Optional[discord.User] = None,
     channel: Optional[Union[discord.TextChannel, discord.Thread]] = None,
     days: Optional[int] = None,
     dm: Optional[int] = 0,
@@ -95,6 +98,7 @@ async def scans(
         title="SEB | Scan Initialized",
         description=(
             f"Category: `{category.name}`\n"
+            f"User Filter: `{user if user else 'All Users'}`\n"
             f"Scope: `{channel.name if channel else 'Full Server'}`\n"
             f"Excluded: `{len(excluded_ids)} channels`\n"
             f"Timeframe: `{f'{days} days' if days else 'All time'}`\n"
@@ -114,6 +118,9 @@ async def scans(
         try:
             async for message in target_channel.history(limit=None, after=after_date):
                 total_scanned += 1
+                
+                if user and message.author.id != user.id:
+                    continue
 
                 for a in message.attachments:
                     found_ext = None
@@ -125,13 +132,15 @@ async def scans(
                         found_ext = file_ext
 
                     if found_ext:
-                        jump = f"https://discord.com{interaction.guild.id}/{target_channel.id}/{message.id}"
+                        base_url = "https://discord.com"
+                        jump = f"{base_url}/channels/{interaction.guild.id}/{target_channel.id}/{message.id}"
                         results.append(f"[{message.created_at.date()}] #{target_channel.name} | {message.author} | {jump} | TYPE: {found_ext.upper()}")
 
                 if category.value in ["Video", "All"]:
                     for e in message.embeds:
                         if e.type == "video" or e.video:
-                            jump = f"https://discord.com{interaction.guild.id}/{target_channel.id}/{message.id}"
+                            base_url = "https://discord.com"
+                            jump = f"{base_url}/channels/{interaction.guild.id}/{target_channel.id}/{message.id}"
                             if not any(jump in r for r in results):
                                 results.append(f"[{message.created_at.date()}] #{target_channel.name} | {message.author} | {jump} | TYPE: EMBED_VIDEO")
 
